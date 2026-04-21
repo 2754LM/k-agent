@@ -2,80 +2,249 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>SSE 测试</title>
+    <title>SSE 流式聊天</title>
+    <!-- 引入 marked.js 用于 Markdown 解析 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 引入 highlight.js 用于代码高亮（可选） -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        button { margin: 5px; padding: 8px 16px; cursor: pointer; }
-        #log { width: 100%; margin-top: 10px; }
-        #message { width: 200px; padding: 5px; }
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background: #f5f7fa; }
+        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .status { font-size: 12px; color: #666; margin-bottom: 15px; display: flex; justify-content: space-between; }
+
+        /* 聊天区域样式 */
+        #chat-box { height: 500px; overflow-y: auto; border: 1px solid #e0e0e0; padding: 15px; margin-bottom: 15px; background: #fafafa; border-radius: 4px; }
+        .msg-row { margin-bottom: 15px; line-height: 1.7; }
+        .msg-user { color: #2563eb; font-weight: 500; }
+        .msg-ai { color: #333; }
+
+        /* Markdown 内容样式 */
+        .msg-ai p { margin: 0.5em 0; }
+        .msg-ai p:first-child { margin-top: 0; }
+        .msg-ai p:last-child { margin-bottom: 0; }
+        .msg-ai code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', 'Cascadia Code', monospace;
+            font-size: 0.9em;
+        }
+        .msg-ai pre {
+            background: #1e293b;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        .msg-ai pre code {
+            background: none;
+            padding: 0;
+            color: #e2e8f0;
+        }
+        .msg-ai blockquote {
+            border-left: 3px solid #3b82f6;
+            padding-left: 12px;
+            color: #64748b;
+            margin: 0.5em 0;
+        }
+        .msg-ai ul, .msg-ai ol { padding-left: 20px; margin: 0.5em 0; }
+        .msg-ai li { margin: 0.25em 0; }
+        .msg-ai table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.5em 0;
+        }
+        .msg-ai th, .msg-ai td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        .msg-ai th { background: #f8fafc; font-weight: 600; }
+        .msg-ai a { color: #2563eb; text-decoration: none; }
+        .msg-ai a:hover { text-decoration: underline; }
+        .msg-ai hr { border: none; border-top: 1px solid #e2e8f0; margin: 1em 0; }
+
+        /* 光标效果 */
+        .cursor::after { content: '▊'; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .bar { display: flex; gap: 10px; }
+        input { flex: 1; padding: 10px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
     </style>
 </head>
 <body>
-<h1>SSE 测试</h1>
-<button onclick="start()">开始 SSE</button>
-<button onclick="stop()">停止 SSE</button>
-<button onclick="init()">登录</button>
-<br>
-<input type="text" id="message" placeholder="输入消息">
-<button onclick="sendMessage()">发送</button>
-<textarea id="log" cols="50" rows="100" readonly></textarea>
+<div class="container">
+    <div class="status">
+        <span id="status">就绪</span>
+        <span id="session-info"></span>
+    </div>
+
+    <div id="chat-box"></div>
+
+    <div class="bar">
+        <input type="text" id="msg" placeholder="输入消息..." autofocus>
+        <button onclick="send()" id="btnSend">发送</button>
+    </div>
+</div>
 
 <script>
-    // ========== 配置区域 ==========
-    const API_BASE = 'http://localhost:8080';
-    // =============================
-
+    const API = 'http://localhost:8080';
     let es = null;
-    const logEl = document.getElementById('log');
-    const msgEl = document.getElementById('message');
+    let currentRawText = ''; // 🔑 存储原始 Markdown 文本
 
-    function log(msg) {
-        logEl.value += `${msg}\n`;
-        logEl.scrollTop = logEl.scrollHeight;
-        console.log(msg);
+    const chatBox = document.getElementById('chat-box');
+    const statusEl = document.getElementById('status');
+    const msgEl = document.getElementById('msg');
+    const btnEl = document.getElementById('btnSend');
+    const sessionInfoEl = document.getElementById('session-info');
+
+    let currentAiDiv = null;
+
+    // 配置 marked.js
+    marked.setOptions({
+        breaks: true, // 支持 GitHub 风格的换行
+        gfm: true,    // 启用 GitHub 风格的 Markdown
+        highlight: function(code, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+                return hljs.highlight(code, { language: lang }).value;
+            }
+            return hljs.highlightAuto(code).value;
+        }
+    });
+
+    // 🔑 核心：流式追加 Markdown 文本并渲染
+    function appendAiText(text) {
+        currentRawText += text; // 累积原始文本
+
+        if (!currentAiDiv) {
+            // 创建新消息行
+            const row = document.createElement('div');
+            row.className = 'msg-row';
+
+            const aiLabel = document.createElement('span');
+            aiLabel.className = 'msg-user';
+            aiLabel.innerText = '🤖 ';
+            row.appendChild(aiLabel);
+
+            const aiContent = document.createElement('div'); // 🔑 改为 div
+            aiContent.className = 'msg-ai cursor';
+            row.appendChild(aiContent);
+
+            chatBox.appendChild(row);
+            currentAiDiv = aiContent;
+        }
+
+        // 🔑 使用 marked 解析 Markdown 并更新 innerHTML
+        currentAiDiv.innerHTML = marked.parse(currentRawText);
+        scrollToBottom();
     }
 
-    function start() {
-        stop();
-        es = new EventSource(`${API_BASE}/connect`, { withCredentials: true });
-        es.onmessage = e => log(`📩 收到：${e.data}`);
-        es.onerror = e => {
-            log(`❌ 连接错误：${e.type}`);
-            if (es.readyState === EventSource.CLOSED) log('🔌 连接已关闭');
-        };
-        es.onopen = () => {
-            log('✅ SSE 连接已建立')
-            fetch(`${API_BASE}/test/send?message=123`, { credentials: 'include' });
-        };
-    }
-
-    function stop() {
-        if (es) {
-            es.close();
-            es = null;
-            log('🔌 连接已关闭');
+    // 完成当前消息
+    function finishAiMessage() {
+        if (currentAiDiv) {
+            currentAiDiv.classList.remove('cursor');
+            // 🔑 最终渲染时高亮代码块
+            currentAiDiv.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+            currentAiDiv = null;
+            currentRawText = ''; // 重置文本缓存
         }
     }
 
-    function init() {
-        fetch(`${API_BASE}/login`, { method: 'GET', credentials: 'include' })
-            .then(() => log('✅ 登录成功'))
-            .catch(err => log(`❌ 登录失败：${err.message}`));
+    function scrollToBottom() {
+        chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    function sendMessage() {
-        const msg = msgEl.value.trim();
-        if (!msg) return log('⚠️ 消息不能为空');
-        fetch(`${API_BASE}/chat?message=${encodeURIComponent(msg)}`, { credentials: 'include' })
-            .then(() => {
-                log('📤 发送成功');
-                msgEl.value = '';
-            })
-            .catch(err => log(`📤 发送失败：${err.message}`));
+    function logUser(msg) {
+        const row = document.createElement('div');
+        row.className = 'msg-row';
+        row.innerHTML = `<span class="msg-user">👤 我: </span><span>${escapeHtml(msg)}</span>`;
+        chatBox.appendChild(row);
+        scrollToBottom();
     }
 
-    // 页面卸载时自动关闭连接
-    window.addEventListener('beforeunload', stop);
+    // 简单的 HTML 转义，防止 XSS
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 🔑 建立 SSE 连接
+    function connectSSE(id) {
+        return new Promise((resolve, reject) => {
+            if (es) es.close();
+            es = new EventSource(`${API}/connect/${id}`);
+
+            es.onopen = () => resolve();
+
+            es.addEventListener('message', e => {
+                // 🔑 保留原有的占位符替换逻辑
+                const data = e.data.replaceAll('[SP]', ' ').replaceAll('[LF]', '\n');
+                appendAiText(data);
+            });
+
+            es.addEventListener('done', () => {
+                finishAiMessage();
+                setStatus('生成完成');
+                setLoading(false);
+                es.close(); es = null;
+            });
+
+            es.onerror = () => {
+                setStatus('连接断开');
+                es.close(); es = null;
+                finishAiMessage();
+                reject(new Error('SSE Error'));
+            };
+        });
+    }
+
+    function setStatus(t) { statusEl.textContent = t; }
+    function setLoading(l) { btnEl.disabled = l; msgEl.disabled = l; }
+
+    async function send() {
+        const content = msgEl.value.trim();
+        if (!content) return;
+
+        setLoading(true);
+        msgEl.value = '';
+        currentRawText = ''; // 🔑 重置 Markdown 缓存
+        logUser(content);
+        setStatus('正在初始化...');
+
+        try {
+            const chatSessionId = 'Session1'
+            const agendId = 'Agent1'
+
+            setStatus('正在连接流式通道...');
+            await connectSSE(chatSessionId);
+
+            setStatus('AI 思考中...');
+            await fetch(`${API}/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    agentId: agendId,
+                    chatSessionId: chatSessionId,
+                    content: content,
+                    chatRole: "USER"
+                })
+            });
+
+
+        } catch (e) {
+            appendAiText(` [错误：${e.message}]`);
+            finishAiMessage();
+            setLoading(false);
+        }
+    }
+
+    msgEl.addEventListener('keypress', e => e.key === 'Enter' && !msgEl.disabled && send());
 </script>
 </body>
 </html>

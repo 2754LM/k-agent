@@ -7,4 +7,6 @@ public interface SseService {
 
     void send(String chatSessionId, String message);
 
+    void done(String chatSessionId);
+
 }
