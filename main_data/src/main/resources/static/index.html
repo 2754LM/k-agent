@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>SSE 测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { margin: 5px; padding: 8px 16px; cursor: pointer; }
+        #log { width: 100%; margin-top: 10px; }
+        #message { width: 200px; padding: 5px; }
+    </style>
+</head>
+<body>
+<h1>SSE 测试</h1>
+<button onclick="start()">开始 SSE</button>
+<button onclick="stop()">停止 SSE</button>
+<button onclick="init()">登录</button>
+<br>
+<input type="text" id="message" placeholder="输入消息">
+<button onclick="sendMessage()">发送</button>
+<textarea id="log" cols="50" rows="100" readonly></textarea>
+
+<script>
+    // ========== 配置区域 ==========
+    const API_BASE = 'http://localhost:8080';
+    // =============================
+
+    let es = null;
+    const logEl = document.getElementById('log');
+    const msgEl = document.getElementById('message');
+
+    function log(msg) {
+        logEl.value += `${msg}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+        console.log(msg);
+    }
+
+    function start() {
+        stop();
+        es = new EventSource(`${API_BASE}/connect`, { withCredentials: true });
+        es.onmessage = e => log(`📩 收到：${e.data}`);
+        es.onerror = e => {
+            log(`❌ 连接错误：${e.type}`);
+            if (es.readyState === EventSource.CLOSED) log('🔌 连接已关闭');
+        };
+        es.onopen = () => {
+            log('✅ SSE 连接已建立')
+            fetch(`${API_BASE}/test/send?message=123`, { credentials: 'include' });
+        };
+    }
+
+    function stop() {
+        if (es) {
+            es.close();
+            es = null;
+            log('🔌 连接已关闭');
+        }
+    }
+
+    function init() {
+        fetch(`${API_BASE}/login`, { method: 'GET', credentials: 'include' })
+            .then(() => log('✅ 登录成功'))
+            .catch(err => log(`❌ 登录失败：${err.message}`));
+    }
+
+    function sendMessage() {
+        const msg = msgEl.value.trim();
+        if (!msg) return log('⚠️ 消息不能为空');
+        fetch(`${API_BASE}/chat?message=${encodeURIComponent(msg)}`, { credentials: 'include' })
+            .then(() => {
+                log('📤 发送成功');
+                msgEl.value = '';
+            })
+            .catch(err => log(`📤 发送失败：${err.message}`));
+    }
+
+    // 页面卸载时自动关闭连接
+    window.addEventListener('beforeunload', stop);
+</script>
+</body>
+</html>
