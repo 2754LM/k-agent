@@ -33,29 +33,27 @@ public class ChatServiceImpl
     private ChatMessageMapper chatMessageMapper;
 
     @Override
-    public ChatMessage insertChatMessage(CreateChatMessageRequest request) {
-        ChatMessageDto chatMessageDto = chatMessageConverter.toDto(request);
-        ChatMessage chatMessage = chatMessageConverter.toEntity(chatMessageDto);
-        int count = chatMessageMapper.insert(chatMessage);
-        if (count != 1) {
-            log.error("Failed to insert chat message: {}", chatMessage);
-            throw new RuntimeException("Failed to insert chat message");
-        }
-        return chatMessage;
+    public CreateChatMessageResponse createChatMessage(CreateChatMessageRequest request) {
+        ChatMessageDto chatMessageDto = saveChatMessage(chatMessageConverter.toDto(request));
+        publisher.publishEvent(new ChatEvent(request.getAgentId(), chatMessageDto.getChatSessionId(), chatMessageDto.getContent()));
+        return new CreateChatMessageResponse();
     }
 
     @Override
-    public CreateChatMessageResponse createChatMessage(CreateChatMessageRequest request) {
-        ChatMessage result = insertChatMessage(request);
-        publisher.publishEvent(new ChatEvent(request.getAgentId(), result.getChatSessionId(), result.getContent()));
-        return new CreateChatMessageResponse();
+    public ChatMessageDto saveChatMessage(ChatMessageDto dto) {
+        ChatMessage entity = chatMessageConverter.toEntity(dto);
+        int count = chatMessageMapper.insert(entity);
+        if (count != 1) {
+            log.error("Failed to save chat message: {}", entity);
+        }
+        return chatMessageConverter.toDto(entity);
     }
 
     @Override
     public List<ChatMessageDto> getChatMessagesBySessionId(String sessionId) {
         List<ChatMessage> chatMessages = this.lambdaQuery()
                 .eq(ChatMessage::getChatSessionId, sessionId)
-                .orderByDesc(ChatMessage::getCreatedAt).list();
+                .orderByAsc(ChatMessage::getCreatedAt).list();
         return chatMessages.stream().map(chatMessageConverter::toDto).toList();
     }
 }

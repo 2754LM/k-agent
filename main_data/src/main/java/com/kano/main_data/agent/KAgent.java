@@ -1,33 +1,46 @@
 package com.kano.main_data.agent;
 
 import com.kano.main_data.model.common.AgentState;
+import com.kano.main_data.model.common.ChatRole;
+import com.kano.main_data.model.common.MetaData;
+import com.kano.main_data.model.dto.ChatMessageDto;
+import com.kano.main_data.service.ChatService;
 import com.kano.main_data.service.SseService;
+import com.kano.main_data.agent.tools.Tool;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.model.tool.ToolExecutionResult;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
+@Slf4j
 public class KAgent {
     private String chatSessionId;
     private String agentId;
     private ChatMemory chatMemory;
     private ChatClient chatClient;
     private SseService sseService;
-    private ChatResponse lastResponse;
+    private ChatResponse lastChatResponse;
     private AgentState agentState;
     private ChatOptions chatOptions;
     private ToolCallingManager toolCallingManager;
+    private List<Tool> tools;
     private int MAX_LOOP = 10;
+    private ChatService chatService;
 
-    KAgent(String agentId, String chatSessionId, String systemPrompt, List<Message> messages, ChatClient chatClient, SseService sseService) {
+    KAgent(String agentId, String chatSessionId, String systemPrompt, List<Message> messages, List<Tool> tools, ChatClient chatClient, SseService sseService, ChatService chatService) {
         this.agentId = agentId;
         this.chatSessionId = chatSessionId;
         this.chatClient = chatClient;
@@ -35,6 +48,8 @@ public class KAgent {
         this.chatMemory = MessageWindowChatMemory.builder()
                 .maxMessages(100)
                 .build();
+        this.tools = tools;
+        this.chatService = chatService;
         chatMemory.add(chatSessionId, messages);
         chatMemory.add(chatSessionId, new SystemMessage(systemPrompt));
         agentState = AgentState.IDLE;
@@ -43,15 +58,58 @@ public class KAgent {
     }
 
     private ChatResponse sendMessage(Prompt prompt) {
-        return chatClient.prompt(prompt).stream().chatResponse().
+        return sendMessage(prompt, "");
+    }
+
+    private ChatResponse sendMessage(Prompt prompt, String systemPrompt) {
+        return chatClient.prompt(prompt)
+                .system(systemPrompt)
+                .tools(tools.toArray())
+                .stream().chatResponse().
                 doOnNext(response -> {
-                    String data = response.getResult().getOutput().getText();
-                    if (data != null && !data.isEmpty()) {
-                        String res = data.replace("\n", "[LF]").replace(" ", "[SP]");
+                    String text = response.getResult().getOutput().getText();
+                    if (text != null && !text.isEmpty()) {
+                        String res = text.replace("\n", "[LF]").replace(" ", "[SP]");
                         sseService.send(chatSessionId, res);
                     }
-                }).doFinally(signalType  -> sseService.done(chatSessionId))
+                    List<AssistantMessage.ToolCall> toolCalls = response.getResult().getOutput().getToolCalls();
+                    if (!toolCalls.isEmpty()) {
+                        String toolCallInfo = toolCalls.stream()
+                                .map(call -> "工具调用: " + call.name() + ", 参数: " + call.arguments())
+                                .collect(Collectors.joining("\n"));
+                        sseService.send(chatSessionId, toolCallInfo);
+                    }
+                })
                 .blockLast();
+    }
+
+    private void saveMessage(Message message) {
+        if(message instanceof AssistantMessage assistantMessage){
+            ChatMessageDto chatMessageDto = ChatMessageDto.builder()
+                    .chatSessionId(chatSessionId)
+                    .content(assistantMessage.getText())
+                    .chatRole(ChatRole.ASSISTANT)
+                    .metaData(MetaData.builder().toolCalls(assistantMessage.getToolCalls()).build())
+                    .build();
+            chatService.saveChatMessage(chatMessageDto);
+        }else if(message instanceof ToolResponseMessage toolResponseMessage){
+
+            for (ToolResponseMessage.ToolResponse respons : toolResponseMessage.getResponses()) {
+                ChatMessageDto chatMessageDto = ChatMessageDto.builder()
+                        .chatSessionId(chatSessionId)
+                        .content(respons.responseData())
+                        .chatRole(ChatRole.TOOL)
+                        .metaData(MetaData.builder().toolResponse(respons).build())
+                        .build();
+                chatService.saveChatMessage(chatMessageDto);
+            }
+        }else{
+            log.error("不支持的 Message 类型: {}, content = {}",
+                    message.getClass().getSimpleName(),
+                    message.getText()
+            );
+             throw new IllegalStateException("不支持的 Message 类型");
+        }
     }
 
     private boolean think() {
@@ -60,12 +118,40 @@ public class KAgent {
                 .chatOptions(chatOptions)
                 .messages(chatMemory.get(chatSessionId))
                 .build();
-        ChatResponse chatResponse = sendMessage(prompt);
-        //todo 是否有工具调用
-        return false;
+        lastChatResponse = sendMessage(prompt, thinkPrompt);
+        AssistantMessage message = lastChatResponse.getResult().getOutput();
+        saveMessage(message);
+        return !message.getToolCalls().isEmpty();
     }
 
     private void execute() {
+        Prompt prompt = Prompt.builder()
+                .messages(this.chatMemory.get(this.chatSessionId))
+                .chatOptions(this.chatOptions)
+                .build();
+        ToolExecutionResult toolExecutionResult = toolCallingManager.executeToolCalls(prompt, this.lastChatResponse);
+        this.chatMemory.clear(this.chatSessionId);
+        this.chatMemory.add(this.chatSessionId, toolExecutionResult.conversationHistory());
+
+        ToolResponseMessage toolResponseMessage = (ToolResponseMessage) toolExecutionResult
+                .conversationHistory()
+                .get(toolExecutionResult.conversationHistory().size() - 1);
+
+        String collect = toolResponseMessage.getResponses()
+                .stream()
+                .map(resp -> "工具" + resp.name() + "的返回结果为：" + resp.responseData())
+                .collect(Collectors.joining("\n"));
+        log.info("工具调用结果：{}", collect);
+
+        // 保存工具调用
+        saveMessage(toolResponseMessage);
+
+        if (toolResponseMessage.getResponses()
+                .stream()
+                .anyMatch(resp -> resp.name().equals("terminate"))) {
+            this.agentState = AgentState.FINISHED;
+            log.info("任务结束");
+        }
 
     }
 
@@ -78,5 +164,6 @@ public class KAgent {
                 break;
             }
         }
+        sseService.done(chatSessionId);
     }
 }

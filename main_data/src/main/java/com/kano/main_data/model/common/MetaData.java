@@ -15,5 +15,6 @@ import java.util.List;
 @Builder
 public class MetaData {
     List<AssistantMessage.ToolCall> toolCalls;
-    List<ToolResponseMessage.ToolResponse> toolResponses;
+    ToolResponseMessage.ToolResponse toolResponse;
+    Integer tokenCount;
 }

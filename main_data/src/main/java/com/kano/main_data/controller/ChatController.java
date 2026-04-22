@@ -5,6 +5,7 @@ import com.kano.main_data.model.entity.ChatMessage;
 import com.kano.main_data.model.request.CreateChatMessageRequest;
 import com.kano.main_data.model.response.CreateChatMessageResponse;
 import com.kano.main_data.service.ChatService;
+import com.kano.main_data.service.serviceImpl.TokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +16,9 @@ public class ChatController {
 
     @Autowired
     ChatService chatService;
+
+    @Autowired
+    TokenService tokenService;
 
     @PostMapping(value = "/chat")
     public ApiResult<CreateChatMessageResponse> createChatMessage(@RequestBody CreateChatMessageRequest request) {

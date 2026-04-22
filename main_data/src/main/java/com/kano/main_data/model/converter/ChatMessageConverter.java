@@ -11,9 +11,6 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Component
 public class ChatMessageConverter {
@@ -32,6 +29,7 @@ public class ChatMessageConverter {
     public ChatMessageDto toDto(ChatMessage chatMessage) {
         try {
             return ChatMessageDto.builder()
+                    .id(chatMessage.getId())
                     .chatSessionId(chatMessage.getChatSessionId())
                     .content(chatMessage.getContent())
                     .chatRole(ChatRole.fromValue(chatMessage.getRole()))
@@ -59,5 +57,17 @@ public class ChatMessageConverter {
         }
     }
 
+    public ChatMessage toEntity(CreateChatMessageRequest dto) {
+        try {
+            return ChatMessage.builder()
+                    .chatSessionId(dto.getChatSessionId())
+                    .content(dto.getContent())
+                    .role(dto.getChatRole().getValue())
+                    .metadata(objectMapper.writeValueAsString(dto.getMetaData()))
+                    .build();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
 }

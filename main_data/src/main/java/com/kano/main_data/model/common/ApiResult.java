@@ -26,6 +26,13 @@ public class ApiResult<T> {
                 .build();
     }
 
+    public static <T> ApiResult<T> failure(String message) {
+        return ApiResult.<T>builder()
+                .code(500)
+                .message(message)
+                .data(null)
+                .build();
+    }
     public static <T> ApiResult<T> error(int code, String message) {
         return ApiResult.<T>builder()
                 .code(code)
