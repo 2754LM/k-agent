@@ -32,7 +32,7 @@ public class ChatMessageDto {
     @Builder
     public static class MetaData {
         List<AssistantMessage.ToolCall> toolCalls;
-        ToolResponseMessage.ToolResponse toolResponse;
+        List<ToolResponseMessage.ToolResponse> toolResponse;
     }
 }
 

@@ -43,3 +43,5 @@ application.yaml
 .idea/
 
 .mvn/
+
+/main_data/src/main/resources/mcp.json

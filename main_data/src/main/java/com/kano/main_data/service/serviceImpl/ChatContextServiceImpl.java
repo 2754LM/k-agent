@@ -36,7 +36,7 @@ public class ChatContextServiceImpl implements ChatContextService {
                         memory.add(AssistantMessage.builder().content(chatMessage.getContent()).toolCalls(chatMessage.getMetaData().getToolCalls()).build());
                 case SYSTEM -> memory.add(new SystemMessage(chatMessage.getContent()));
                 case TOOL ->
-                        memory.add(ToolResponseMessage.builder().responses(List.of(chatMessage.getMetaData().getToolResponse())).build());
+                        memory.add(ToolResponseMessage.builder().responses(chatMessage.getMetaData().getToolResponse()).build());
                 default -> throw new IllegalStateException("Unexpected value: " + chatMessage.getChatRole());
             }
         }
@@ -87,7 +87,7 @@ public class ChatContextServiceImpl implements ChatContextService {
         Usage usage = chatResponse.getMetadata().getUsage();
         String content = chatResponse.getResult().getOutput().getText();
         //更新session
-        ChatMessageDto chatMessageDto = ChatMessageDto.builder().agentId("0").chatSessionId(sessionId).content(content).chatRole(ChatRole.SYSTEM).totalTokens(usage.getTotalTokens()).promptTokens(usage.getPromptTokens()).completionTokens(usage.getCompletionTokens()).build();
+        ChatMessageDto chatMessageDto = ChatMessageDto.builder().agentId("0").chatSessionId(sessionId).content(content).chatRole(ChatRole.USER).totalTokens(usage.getTotalTokens()).promptTokens(usage.getPromptTokens()).completionTokens(usage.getCompletionTokens()).build();
         chatMessageService.saveChatMessage(chatMessageDto);
         return chatResponse;
     }

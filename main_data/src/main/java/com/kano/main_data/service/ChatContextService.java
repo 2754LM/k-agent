@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface ChatContextService {
     List<Message> loadMemory(String sessionId);
-    //todo压缩函数
+
     ChatResponse compressChatMessages(String sessionId);
 }
 
