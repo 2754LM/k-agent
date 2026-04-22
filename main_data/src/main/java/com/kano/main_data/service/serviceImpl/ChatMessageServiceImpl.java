@@ -8,7 +8,7 @@ import com.kano.main_data.model.entity.ChatMessage;
 import com.kano.main_data.model.mapper.ChatMessageMapper;
 import com.kano.main_data.model.request.CreateChatMessageRequest;
 import com.kano.main_data.model.response.CreateChatMessageResponse;
-import com.kano.main_data.service.ChatService;
+import com.kano.main_data.service.ChatMessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -19,9 +19,9 @@ import java.util.List;
 
 @Slf4j
 @Service
-public class ChatServiceImpl
+public class ChatMessageServiceImpl
         extends ServiceImpl<ChatMessageMapper, ChatMessage>
-        implements ChatService {
+        implements ChatMessageService {
 
     @Autowired
     private ApplicationEventPublisher publisher;
@@ -31,6 +31,7 @@ public class ChatServiceImpl
 
     @Autowired
     private ChatMessageMapper chatMessageMapper;
+
 
     @Override
     public CreateChatMessageResponse createChatMessage(CreateChatMessageRequest request) {
@@ -55,5 +56,11 @@ public class ChatServiceImpl
                 .eq(ChatMessage::getChatSessionId, sessionId)
                 .orderByAsc(ChatMessage::getCreatedAt).list();
         return chatMessages.stream().map(chatMessageConverter::toDto).toList();
+    }
+
+    //todo
+    @Override
+    public List<ChatMessageDto> getChatMessagesBySessionIdRecently(String sessionId) {
+        return List.of();
     }
 }

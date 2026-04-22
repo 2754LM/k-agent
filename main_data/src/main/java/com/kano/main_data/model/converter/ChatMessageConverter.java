@@ -3,11 +3,9 @@ package com.kano.main_data.model.converter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kano.main_data.model.common.ChatRole;
-import com.kano.main_data.model.common.MetaData;
 import com.kano.main_data.model.dto.ChatMessageDto;
 import com.kano.main_data.model.entity.ChatMessage;
 import com.kano.main_data.model.request.CreateChatMessageRequest;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -33,9 +31,10 @@ public class ChatMessageConverter {
                     .chatSessionId(chatMessage.getChatSessionId())
                     .content(chatMessage.getContent())
                     .chatRole(ChatRole.fromValue(chatMessage.getRole()))
-                    .metaData(objectMapper.readValue(chatMessage.getMetadata(), MetaData.class))
+                    .metaData(objectMapper.readValue(chatMessage.getMetadata(), ChatMessageDto.MetaData.class))
                     .createdAt(chatMessage.getCreatedAt())
                     .updatedAt(chatMessage.getUpdatedAt())
+                    .tokenCount(chatMessage.getTokenCount())
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
@@ -50,6 +49,7 @@ public class ChatMessageConverter {
                     .role(dto.getChatRole().getValue())
                     .metadata(objectMapper.writeValueAsString(dto.getMetaData()))
                     .createdAt(dto.getCreatedAt())
+                    .tokenCount(dto.getTokenCount())
                     .updatedAt(dto.getUpdatedAt())
                     .build();
         } catch (JsonProcessingException e) {

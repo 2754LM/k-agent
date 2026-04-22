@@ -3,7 +3,7 @@ package com.kano.main_data.agent;
 import com.kano.main_data.model.dto.ChatMessageDto;
 import com.kano.main_data.model.entity.Agent;
 import com.kano.main_data.registry.ChatClientRegistry;
-import com.kano.main_data.service.ChatService;
+import com.kano.main_data.service.ChatMessageService;
 import com.kano.main_data.service.SseService;
 import com.kano.main_data.service.ToolService;
 import com.kano.main_data.agent.tools.Tool;
@@ -69,6 +69,6 @@ public class KAgentFactory {
         //todo 根据agent查询
         ChatClient chatClient = chatClientRegistry.getChatClient("deepseek");
         List<Tool> tools = loadTools();
-        return new KAgent(agentId, sessionId, "", messages, tools, chatClient, sseService, chatService);
+        return new KAgent(agentId, sessionId, "", messages, tools, chatClient, sseService, chatMessageService);
     }
 }

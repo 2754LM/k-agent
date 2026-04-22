@@ -8,11 +8,14 @@ import com.kano.main_data.model.response.CreateChatMessageResponse;
 
 import java.util.List;
 
-public interface ChatService extends IService<ChatMessage> {
+public interface ChatMessageService extends IService<ChatMessage> {
 
     CreateChatMessageResponse createChatMessage(CreateChatMessageRequest request);
 
     ChatMessageDto saveChatMessage(ChatMessageDto chatMessageDto);
 
     List<ChatMessageDto> getChatMessagesBySessionId(String sessionId);
+
+    List<ChatMessageDto> getChatMessagesBySessionIdRecently(String sessionId);
+
 }
