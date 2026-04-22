@@ -34,7 +34,9 @@ public class ChatMessageConverter {
                     .metaData(objectMapper.readValue(chatMessage.getMetadata(), ChatMessageDto.MetaData.class))
                     .createdAt(chatMessage.getCreatedAt())
                     .updatedAt(chatMessage.getUpdatedAt())
-                    .tokenCount(chatMessage.getTokenCount())
+                    .totalTokens(chatMessage.getTotalTokens())
+                    .promptTokens(chatMessage.getPromptTokens())
+                    .completionTokens(chatMessage.getCompletionTokens())
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
@@ -49,7 +51,9 @@ public class ChatMessageConverter {
                     .role(dto.getChatRole().getValue())
                     .metadata(objectMapper.writeValueAsString(dto.getMetaData()))
                     .createdAt(dto.getCreatedAt())
-                    .tokenCount(dto.getTokenCount())
+                    .totalTokens(dto.getTotalTokens())
+                    .promptTokens(dto.getPromptTokens())
+                    .completionTokens(dto.getCompletionTokens())
                     .updatedAt(dto.getUpdatedAt())
                     .build();
         } catch (JsonProcessingException e) {

@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <title>SSE 流式聊天</title>
+
     <!-- 引入 marked.js 用于 Markdown 解析 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
     <!-- 引入 highlight.js 用于代码高亮（可选） -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
     <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js"></script>
+
+    <!-- ✅ 新增：KaTeX（渲染 LaTeX/数学公式） -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; background: #f5f7fa; }
         .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
@@ -115,6 +123,22 @@
         }
     });
 
+    // ✅ 新增：渲染数学公式（不改协议：marked 后处理即可）
+    function renderMath(container) {
+        if (!window.renderMathInElement) return;
+
+        renderMathInElement(container, {
+            // ✅ 为了简单+不误伤金额 $100：只开启 $$...$$
+            // 如果你也要支持 $...$，看文末改法
+            delimiters: [
+                { left: "$$", right: "$$", display: true },
+                { left: "\\[", right: "\\]", display: true },
+            ],
+            throwOnError: false,
+            ignoredTags: ["script", "noscript", "style", "textarea", "pre", "code"]
+        });
+    }
+
     // 🔑 核心：流式追加 Markdown 文本并渲染
     function appendAiText(text) {
         currentRawText += text; // 累积原始文本
@@ -139,6 +163,10 @@
 
         // 🔑 使用 marked 解析 Markdown 并更新 innerHTML
         currentAiDiv.innerHTML = marked.parse(currentRawText);
+
+        // ✅ 新增：在 HTML 上做数学渲染
+        renderMath(currentAiDiv);
+
         scrollToBottom();
     }
 
@@ -146,10 +174,15 @@
     function finishAiMessage() {
         if (currentAiDiv) {
             currentAiDiv.classList.remove('cursor');
+
             // 🔑 最终渲染时高亮代码块
             currentAiDiv.querySelectorAll('pre code').forEach((block) => {
                 hljs.highlightElement(block);
             });
+
+            // ✅ 可选：完成后再渲染一次数学（更稳）
+            renderMath(currentAiDiv);
+
             currentAiDiv = null;
             currentRawText = ''; // 重置文本缓存
         }
@@ -235,7 +268,6 @@
                     chatRole: "USER"
                 })
             });
-
 
         } catch (e) {
             appendAiText(` [错误：${e.message}]`);

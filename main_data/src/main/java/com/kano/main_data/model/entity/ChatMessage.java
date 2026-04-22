@@ -20,11 +20,13 @@ import java.util.Map;
 @AllArgsConstructor
 public class ChatMessage {
     @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    private Long id;
     private String chatSessionId;
     private String content;
     private String role;
-    private int tokenCount;
+    private Integer totalTokens;
+    private Integer promptTokens;
+    private Integer completionTokens;
     //json
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String metadata;

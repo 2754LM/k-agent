@@ -14,7 +14,7 @@ import java.util.List;
 @Data
 @Builder
 public class ChatMessageDto {
-    private String id;
+    private Long id;
     private String agentId;
     private String chatSessionId;
     private String content;
@@ -22,7 +22,9 @@ public class ChatMessageDto {
     private MetaData metaData;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private int tokenCount;
+    private Integer totalTokens;
+    private Integer promptTokens;
+    private Integer completionTokens;
 
     @Data
     @NoArgsConstructor

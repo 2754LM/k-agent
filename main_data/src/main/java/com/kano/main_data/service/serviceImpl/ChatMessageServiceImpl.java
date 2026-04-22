@@ -58,9 +58,12 @@ public class ChatMessageServiceImpl
         return chatMessages.stream().map(chatMessageConverter::toDto).toList();
     }
 
-    //todo
     @Override
-    public List<ChatMessageDto> getChatMessagesBySessionIdRecently(String sessionId) {
-        return List.of();
+    public List<ChatMessageDto> getChatMessagesBySessionIdRecently(String sessionId, int startId) {
+        List<ChatMessage> chatMessages = this.lambdaQuery()
+                .eq(ChatMessage::getChatSessionId, sessionId)
+                .gt(ChatMessage::getId, startId)
+                .orderByAsc(ChatMessage::getCreatedAt).list();
+        return chatMessages.stream().map(chatMessageConverter::toDto).toList();
     }
 }

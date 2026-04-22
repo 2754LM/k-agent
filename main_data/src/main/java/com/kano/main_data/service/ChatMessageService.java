@@ -16,6 +16,6 @@ public interface ChatMessageService extends IService<ChatMessage> {
 
     List<ChatMessageDto> getChatMessagesBySessionId(String sessionId);
 
-    List<ChatMessageDto> getChatMessagesBySessionIdRecently(String sessionId);
+    List<ChatMessageDto> getChatMessagesBySessionIdRecently(String sessionId, int startId);
 
 }

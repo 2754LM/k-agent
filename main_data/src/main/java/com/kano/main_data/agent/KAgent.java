@@ -3,10 +3,12 @@ package com.kano.main_data.agent;
 import com.kano.main_data.model.common.AgentState;
 import com.kano.main_data.model.common.ChatRole;
 import com.kano.main_data.model.dto.ChatMessageDto;
+import com.kano.main_data.service.ChatContextService;
 import com.kano.main_data.service.ChatMessageService;
 import com.kano.main_data.service.SseService;
 import com.kano.main_data.agent.tools.Tool;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.User;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -14,6 +16,8 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.metadata.DefaultUsage;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -38,8 +42,11 @@ public class KAgent {
     private List<Tool> tools;
     private int MAX_LOOP = 10;
     private ChatMessageService chatMessageService;
+    private ChatContextService chatContextService;
 
-    KAgent(String agentId, String chatSessionId, String systemPrompt, List<Message> messages, List<Tool> tools, ChatClient chatClient, SseService sseService, ChatMessageService chatMessageService) {
+    KAgent(String agentId, String chatSessionId, String systemPrompt, List<Message> messages,
+           List<Tool> tools, ChatClient chatClient, SseService sseService, ChatMessageService chatMessageService,
+           ChatContextService chatContextService) {
         this.agentId = agentId;
         this.chatSessionId = chatSessionId;
         this.chatClient = chatClient;
@@ -49,6 +56,7 @@ public class KAgent {
                 .build();
         this.tools = tools;
         this.chatMessageService = chatMessageService;
+        this.chatContextService = chatContextService;
         chatMemory.add(chatSessionId, messages);
         chatMemory.add(chatSessionId, new SystemMessage(systemPrompt));
         agentState = AgentState.IDLE;
@@ -82,32 +90,50 @@ public class KAgent {
                 .blockLast();
     }
 
-    private void saveMessage(Message message, Integer tokenCount) {
-        if(message instanceof AssistantMessage assistantMessage){
+    private void saveMessage(Message message, Usage usage) {
+        if (usage == null) {
+            usage = new DefaultUsage(null, null, null);
+        }
+        if (message instanceof AssistantMessage assistantMessage) {
             ChatMessageDto chatMessageDto = ChatMessageDto.builder()
                     .chatSessionId(chatSessionId)
                     .content(assistantMessage.getText())
                     .chatRole(ChatRole.ASSISTANT)
+                    .totalTokens(usage.getTotalTokens())
+                    .promptTokens(usage.getPromptTokens())
+                    .completionTokens(usage.getCompletionTokens())
                     .metaData(ChatMessageDto.MetaData.builder().toolCalls(assistantMessage.getToolCalls()).build())
                     .build();
             chatMessageService.saveChatMessage(chatMessageDto);
-        }else if(message instanceof ToolResponseMessage toolResponseMessage){
-
+        } else if (message instanceof ToolResponseMessage toolResponseMessage) {
             for (ToolResponseMessage.ToolResponse respons : toolResponseMessage.getResponses()) {
                 ChatMessageDto chatMessageDto = ChatMessageDto.builder()
                         .chatSessionId(chatSessionId)
                         .content(respons.responseData())
                         .chatRole(ChatRole.TOOL)
+                        .totalTokens(usage.getTotalTokens())
+                        .promptTokens(usage.getPromptTokens())
+                        .completionTokens(usage.getCompletionTokens())
                         .metaData(ChatMessageDto.MetaData.builder().toolResponse(respons).build())
                         .build();
                 chatMessageService.saveChatMessage(chatMessageDto);
             }
-        }else{
+        } else if (message instanceof SystemMessage systemMessage) {
+            ChatMessageDto chatMessageDto = ChatMessageDto.builder()
+                    .chatSessionId(chatSessionId)
+                    .content(systemMessage.getText())
+                    .chatRole(ChatRole.SYSTEM)
+                    .totalTokens(usage.getTotalTokens())
+                    .promptTokens(usage.getPromptTokens())
+                    .completionTokens(usage.getCompletionTokens())
+                    .build();
+            chatMessageService.saveChatMessage(chatMessageDto);
+        } else {
             log.error("不支持的 Message 类型: {}, content = {}",
                     message.getClass().getSimpleName(),
                     message.getText()
             );
-             throw new IllegalStateException("不支持的 Message 类型");
+            throw new IllegalStateException("不支持的 Message 类型");
         }
     }
 
@@ -119,7 +145,8 @@ public class KAgent {
                 .build();
         lastChatResponse = sendMessage(prompt, thinkPrompt);
         AssistantMessage message = lastChatResponse.getResult().getOutput();
-        saveMessage(message, lastChatResponse.getMetadata().getUsage().getTotalTokens());
+        Usage usage = lastChatResponse.getMetadata().getUsage();
+        saveMessage(message, usage);
         return !message.getToolCalls().isEmpty();
     }
 
