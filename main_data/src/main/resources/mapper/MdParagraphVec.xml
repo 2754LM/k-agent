@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kano.main_data.model.mapper.MdParagraphVecMapper">
+    <select id="searchByVector" resultType="com.kano.main_data.model.entity.MdParagraphVec">
+        SELECT * FROM md_heading_vec
+        WHERE heading_id IN
+        <foreach collection="headingIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY cosine_distance(embedding, #{queryVector, typeHandler=com.kano.main_data.handler.VectorTypeHandler})
+        LIMIT #{topK}
+    </select>
+</mapper>

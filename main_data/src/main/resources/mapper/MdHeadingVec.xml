@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.kano.main_data.model.mapper.MdHeadingVecMapper">
+    <select id="searchByVector" resultType="com.kano.main_data.model.entity.MdHeadingVec">
+        SELECT * FROM md_heading_vec
+        ORDER BY cosine_distance(embedding, #{queryVector, typeHandler=com.kano.main_data.handler.VectorTypeHandler})
+        LIMIT #{topK}
+    </select>
+</mapper>

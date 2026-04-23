@@ -1,34 +1,28 @@
 package com.kano.main_data.model.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.kano.main_data.handler.JsonbTypeHandler;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import com.kano.main_data.handler.VectorTypeHandler;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 
 @Data
-@Builder
-@NoArgsConstructor
 @TableName(autoResultMap = true)
-@AllArgsConstructor
-public class ChatMessage {
-    @TableId(type = IdType.ASSIGN_ID)
-    private Long id;
-    private String chatSessionId;
+public class MdHeadingVec {
+    @TableId
+    private String headingId;
+
     private String content;
-    private String role;
-    private Integer totalTokens;
-    private Integer promptTokens;
-    private Integer completionTokens;
+
     @TableField(typeHandler = JsonbTypeHandler.class)
     private String metadata;
+
+    @TableField(typeHandler = VectorTypeHandler.class)
+    private float[] embedding;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
