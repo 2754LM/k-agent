@@ -5,12 +5,14 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.kano.main_data.handler.JsonbTypeHandler;
 import com.kano.main_data.handler.VectorTypeHandler;
+import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
 @TableName(autoResultMap = true)
+@Builder
 public class MdParagraphVec {
     @TableId
     private String paragraphId;
