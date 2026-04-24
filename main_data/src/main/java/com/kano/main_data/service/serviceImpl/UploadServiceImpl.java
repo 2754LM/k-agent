@@ -42,7 +42,7 @@ public class UploadServiceImpl  extends ServiceImpl<FileInfoMapper, FileInfo> im
         }
         FileInfo fileInfo = FileInfo.builder()
                 .id(UUID.randomUUID().toString().replace("-", ""))
-                .name(file.getName())
+                .name(file.getOriginalFilename())
                 .type("markdown")
                 .size(file.getSize())
                 .md5(md5)

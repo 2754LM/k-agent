@@ -35,7 +35,9 @@ public class RagServiceImpl implements RagService {
         float[] queryVector = embeddingTool.embed(text);
         List<MdHeadingVec> headingVecs = mdHeadingVecMapper.searchByVector(queryVector, topK);
         List<MdParagraphVec> paragraphVecs = mdParagraphVecMapper.searchByVector(queryVector, topK, headingVecs.stream().map(MdHeadingVec::getHeadingId).toList());
-        return paragraphVecs.stream().map(MdParagraphVec::getContent).toList();
+        List<String> res = new java.util.ArrayList<>(paragraphVecs.stream().map(MdParagraphVec::getContent).toList());
+        res.addAll(headingVecs.stream().map(MdHeadingVec::getContent).toList());
+        return res;
     }
 
 

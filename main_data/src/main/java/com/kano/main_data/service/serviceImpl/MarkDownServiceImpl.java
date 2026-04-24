@@ -43,6 +43,16 @@ public class MarkDownServiceImpl implements MarkDownService {
     @Autowired
     RagService ragService;
 
+    private static class PathEntry {
+        String text;
+        int level;
+
+        PathEntry(String text, int level) {
+            this.text = text;
+            this.level = level;
+        }
+    }
+
     @Override
     public void parseMd(FileInfoDto fileInfoDto, String mdContent) {
         String fileName = fileInfoDto.getName();
@@ -62,11 +72,26 @@ public class MarkDownServiceImpl implements MarkDownService {
 
         List<MdHeadingVecDto> headings = new ArrayList<>();
         List<MdParagraphVecDto> paragraphs = new ArrayList<>();
-        List<String> path = new ArrayList<>();
-        path.add(fileName);
+        // 完整路径 -> headingId 的快速映射
+        Map<String, String> pathToHeadingId = new HashMap<>();
 
-        addHeading(headings, path, fileId);
-        traverse(document, headings, paragraphs, path, fileId);
+        // 根路径（文件名，级别 0）
+        List<PathEntry> rootPath = new ArrayList<>();
+        rootPath.add(new PathEntry(fileName, 0));
+        String rootPathStr = fileName;
+        String rootHeadingId = UUID.randomUUID().toString().replace("-", "");
+        pathToHeadingId.put(rootPathStr, rootHeadingId);
+        headings.add(MdHeadingVecDto.builder()
+                .fileId(fileId)
+                .headingId(rootHeadingId)
+                .content(rootPathStr)
+                .build());
+
+        StringBuilder buffer = new StringBuilder();
+        traverse(document, headings, paragraphs, rootPath, fileId, buffer, pathToHeadingId);
+        // 文档末尾可能还有未 flush 的内容
+        flushBuffer(buffer, paragraphs, rootPath, pathToHeadingId);
+
         printResultTree(headings, paragraphs);
         ragService.saveMd(headings, paragraphs);
     }
@@ -74,41 +99,92 @@ public class MarkDownServiceImpl implements MarkDownService {
     private void traverse(Node node,
                           List<MdHeadingVecDto> headings,
                           List<MdParagraphVecDto> paragraphs,
-                          List<String> path, String fileId) {
-        int pushed = 0;
+                          List<PathEntry> parentPath, // 上级调用者的路径（只读）
+                          String fileId,
+                          StringBuilder buffer,
+                          Map<String, String> pathToHeadingId) {
+        // 使用本地的路径副本，避免污染父级
+        List<PathEntry> currentPath = new ArrayList<>(parentPath);
 
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
             if (child instanceof Heading heading) {
-                path.add(clean(heading.getText().toString()));
-                addHeading(headings, path, fileId);
-                pushed++;
+                // 遇到新标题，先 flush 之前累积的内容（属于当前标题）
+                flushBuffer(buffer, paragraphs, currentPath, pathToHeadingId);
+
+                int newLevel = heading.getLevel(); // 1~6
+                // 弹出所有级别 >= newLevel 的路径条目（包括旧的同级标题）
+                while (!currentPath.isEmpty() && currentPath.get(currentPath.size() - 1).level >= newLevel) {
+                    currentPath.remove(currentPath.size() - 1);
+                }
+                // 添加新标题条目
+                currentPath.add(new PathEntry(clean(heading.getText().toString()), newLevel));
+                // 注册标题对象，并建立路径映射
+                String currentPathStr = pathToString(currentPath);
+                String headingId = UUID.randomUUID().toString().replace("-", "");
+                pathToHeadingId.put(currentPathStr, headingId);
+                headings.add(MdHeadingVecDto.builder()
+                        .fileId(fileId)
+                        .headingId(headingId)
+                        .content(currentPathStr)
+                        .build());
                 continue;
             }
 
-            String headingId = headings.get(path.size() - 1).getHeadingId();
-
+            // 以下将所有非标题节点的文本追加到 buffer
             if (child instanceof Paragraph paragraph) {
-                addParagraph(paragraphs, clean(paragraph.getChars().toString()), headingId);
+                buffer.append(clean(paragraph.getChars().toString())).append(" ");
             } else if (child instanceof ListBlock listBlock) {
-                for (String item : extractListItems(listBlock)) {
-                    addParagraph(paragraphs, item, headingId);
+                List<String> items = extractListItems(listBlock);
+                String joined = String.join("; ", items);
+                if (!joined.isBlank()) {
+                    buffer.append(joined).append(" ");
                 }
             } else if (child instanceof TableBlock tableBlock) {
-                for (String row : extractTableRows(tableBlock)) {
-                    addParagraph(paragraphs, row, headingId);
+                List<String> rows = extractTableRows(tableBlock);
+                String joined = String.join("; ", rows);
+                if (!joined.isBlank()) {
+                    buffer.append(joined).append(" ");
                 }
             } else if (child instanceof BlockQuote quote) {
-                traverse(quote, headings, paragraphs, path, fileId);
+                // 引用块递归，传入当前路径副本，其内部标题不会影响外部
+                traverse(quote, headings, paragraphs, currentPath, fileId, buffer, pathToHeadingId);
             } else if (child instanceof Block block) {
-                addParagraph(paragraphs, clean(block.getChars().toString()), headingId);
+                buffer.append(clean(block.getChars().toString())).append(" ");
             }
         }
 
-        while (pushed-- > 0) {
-            path.remove(path.size() - 1);
-        }
+        // 本层遍历结束，flush 剩余内容（属于当前标题）
+        flushBuffer(buffer, paragraphs, currentPath, pathToHeadingId);
     }
 
+    private void flushBuffer(StringBuilder buffer,
+                             List<MdParagraphVecDto> paragraphs,
+                             List<PathEntry> currentPath,
+                             Map<String, String> pathToHeadingId) {
+        if (buffer.length() == 0) return;
+        String text = buffer.toString().trim();
+        buffer.setLength(0);
+        if (text.isEmpty()) return;
+
+        String pathStr = pathToString(currentPath);
+        String headingId = pathToHeadingId.get(pathStr);
+        // 正常情况下 headingId 一定存在，若不存在则用空，避免 NPE
+        if (headingId == null) headingId = "";
+
+        String prefix = pathStr;
+        addParagraph(paragraphs, prefix + ": " + text, headingId);
+    }
+
+    // 将路径条目列表转为 " > " 分隔的字符串
+    private String pathToString(List<PathEntry> path) {
+        List<String> parts = new ArrayList<>();
+        for (PathEntry entry : path) {
+            parts.add(entry.text);
+        }
+        return String.join(" > ", parts);
+    }
+
+    // ------------- 列表和表格提取逻辑（保持不变） -------------
     private List<String> extractListItems(ListBlock listBlock) {
         List<String> result = new ArrayList<>();
         for (Node child = listBlock.getFirstChild(); child != null; child = child.getNext()) {
@@ -205,14 +281,7 @@ public class MarkDownServiceImpl implements MarkDownService {
         }
         return String.join(" ", parts);
     }
-
-    private void addHeading(List<MdHeadingVecDto> headings, List<String> path, String fileId) {
-        headings.add(MdHeadingVecDto.builder()
-                .fileId(fileId)
-                .headingId(UUID.randomUUID().toString().replace("-", ""))
-                .content(String.join(" > ", path))
-                .build());
-    }
+    // -----------------------------------------------------------
 
     private void addParagraph(List<MdParagraphVecDto> paragraphs, String content, String headingId) {
         if (content.isBlank()) return;
@@ -227,6 +296,7 @@ public class MarkDownServiceImpl implements MarkDownService {
         return text == null ? "" : text.replaceAll("\\s+", " ").trim();
     }
 
+    // ------------- 调试打印，已适配新的 headings 结构 -------------
     private void printResultTree(List<MdHeadingVecDto> headings, List<MdParagraphVecDto> paragraphs) {
         log.info("====== Result Tree ======");
         if (headings == null || headings.isEmpty()) return;
@@ -278,5 +348,4 @@ public class MarkDownServiceImpl implements MarkDownService {
         int idx = path.lastIndexOf(" > ");
         return idx < 0 ? null : path.substring(0, idx);
     }
-
 }

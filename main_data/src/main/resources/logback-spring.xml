@@ -1,4 +1,5 @@
 <configuration>
+    <!-- 文件输出 -->
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <file>logs/app.log</file>
         <encoder>
@@ -6,9 +7,20 @@
         </encoder>
     </appender>
 
+    <!-- 控制台输出 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 根日志级别及输出目标 -->
     <root level="INFO">
         <appender-ref ref="FILE"/>
+        <appender-ref ref="CONSOLE"/>   <!-- 新增：同时输出到控制台 -->
     </root>
+
+    <!-- 以下 logger 保持原样，会继承 root 的输出目标（FILE + CONSOLE） -->
     <logger name="org.springframework.ai" level="DEBUG"/>
     <logger name="org.springframework.context.annotation" level="DEBUG"/>
     <logger name="com.kano.main_data" level="DEBUG"/>

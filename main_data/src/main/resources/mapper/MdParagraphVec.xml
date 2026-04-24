@@ -4,7 +4,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.kano.main_data.model.mapper.MdParagraphVecMapper">
     <select id="searchByVector" resultType="com.kano.main_data.model.entity.MdParagraphVec">
-        SELECT * FROM md_heading_vec
+        SELECT * FROM md_paragraph_vec
         WHERE heading_id IN
         <foreach collection="headingIds" item="id" open="(" separator="," close=")">
             #{id}
