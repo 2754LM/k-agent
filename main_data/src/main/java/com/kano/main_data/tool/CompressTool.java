@@ -28,7 +28,7 @@ public class CompressTool {
                 - 直接输出清洗后的纯文本，无任何废话前缀。
                 """;
 
-        ChatClient client = chatClientRegistry.getChatClient("dashscope-chat");
+        ChatClient client = chatClientRegistry.getChatClient("deepseek");
         List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
 
         for (ToolResponseMessage.ToolResponse response : toolResponseMessage.getResponses()) {

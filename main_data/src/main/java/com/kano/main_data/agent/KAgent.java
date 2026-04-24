@@ -185,7 +185,7 @@ public class KAgent {
         ToolResponseMessage toolResponseMessage = (ToolResponseMessage) toolExecutionResult
                 .conversationHistory()
                 .get(toolExecutionResult.conversationHistory().size() - 1);
-        ToolResponseMessage compressToolResponse = toolResponseMessage;
+        ToolResponseMessage compressToolResponse = compressTool.compressToolResponse(toolResponseMessage);
 
         chatMemory.add(chatSessionId, toolExecutionResult.conversationHistory().get(toolExecutionResult.conversationHistory().size() - 2));
         chatMemory.add(chatSessionId, compressToolResponse);

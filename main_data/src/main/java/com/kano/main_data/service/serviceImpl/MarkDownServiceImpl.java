@@ -43,6 +43,7 @@ public class MarkDownServiceImpl implements MarkDownService {
     @Autowired
     RagService ragService;
 
+    // 用于维护标题路径的条目，包含文本和级别
     private static class PathEntry {
         String text;
         int level;

@@ -1,5 +1,6 @@
 package com.kano.main_data.config;
 
+import com.alibaba.cloud.ai.model.RerankModel;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaApi;
