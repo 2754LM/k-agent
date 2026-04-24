@@ -1,8 +1,10 @@
 package com.kano.main_data.service.serviceImpl;
 
+import com.kano.main_data.model.dto.FileInfoDto;
 import com.kano.main_data.model.dto.MdHeadingVecDto;
 import com.kano.main_data.model.dto.MdParagraphVecDto;
 import com.kano.main_data.service.MarkDownService;
+import com.kano.main_data.service.RagService;
 import com.vladsch.flexmark.ast.BlockQuote;
 import com.vladsch.flexmark.ast.Heading;
 import com.vladsch.flexmark.ast.ListBlock;
@@ -23,6 +25,7 @@ import com.vladsch.flexmark.util.ast.Block;
 import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.MutableDataSet;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -37,9 +40,14 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class MarkDownServiceImpl implements MarkDownService {
+    @Autowired
+    RagService ragService;
 
     @Override
-    public void parseMd(String fileName, String mdContent) {
+    public void parseMd(FileInfoDto fileInfoDto, String mdContent) {
+        String fileName = fileInfoDto.getName();
+        String fileId = fileInfoDto.getId();
+
         Parser parser = Parser.builder(new MutableDataSet().set(Parser.EXTENSIONS, Arrays.asList(
                 TablesExtension.create(),
                 StrikethroughExtension.create(),
@@ -57,22 +65,22 @@ public class MarkDownServiceImpl implements MarkDownService {
         List<String> path = new ArrayList<>();
         path.add(fileName);
 
-        addHeading(headings, path);
-        traverse(document, headings, paragraphs, path);
-
+        addHeading(headings, path, fileId);
+        traverse(document, headings, paragraphs, path, fileId);
         printResultTree(headings, paragraphs);
+        ragService.saveMd(headings, paragraphs);
     }
 
     private void traverse(Node node,
                           List<MdHeadingVecDto> headings,
                           List<MdParagraphVecDto> paragraphs,
-                          List<String> path) {
+                          List<String> path, String fileId) {
         int pushed = 0;
 
         for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
             if (child instanceof Heading heading) {
                 path.add(clean(heading.getText().toString()));
-                addHeading(headings, path);
+                addHeading(headings, path, fileId);
                 pushed++;
                 continue;
             }
@@ -90,7 +98,7 @@ public class MarkDownServiceImpl implements MarkDownService {
                     addParagraph(paragraphs, row, headingId);
                 }
             } else if (child instanceof BlockQuote quote) {
-                traverse(quote, headings, paragraphs, path);
+                traverse(quote, headings, paragraphs, path, fileId);
             } else if (child instanceof Block block) {
                 addParagraph(paragraphs, clean(block.getChars().toString()), headingId);
             }
@@ -198,8 +206,9 @@ public class MarkDownServiceImpl implements MarkDownService {
         return String.join(" ", parts);
     }
 
-    private void addHeading(List<MdHeadingVecDto> headings, List<String> path) {
+    private void addHeading(List<MdHeadingVecDto> headings, List<String> path, String fileId) {
         headings.add(MdHeadingVecDto.builder()
+                .fileId(fileId)
                 .headingId(UUID.randomUUID().toString().replace("-", ""))
                 .content(String.join(" > ", path))
                 .build());

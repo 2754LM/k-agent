@@ -27,4 +27,6 @@ public class MdHeadingVec {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    private String fileId;
 }

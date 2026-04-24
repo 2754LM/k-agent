@@ -17,6 +17,7 @@ public class MdHeadingVecConverter {
                 .createdAt(mdHeadingVecDto.getCreatedAt())
                 .updatedAt(mdHeadingVecDto.getUpdatedAt())
                 .embedding(embeddingTool.embed(mdHeadingVecDto.getContent()))
+                .fileId(mdHeadingVecDto.getFileId())
                 .build();
     }
 
@@ -24,6 +25,7 @@ public class MdHeadingVecConverter {
         return MdHeadingVecDto.builder()
                 .headingId(mdHeadingVec.getHeadingId())
                 .content(mdHeadingVec.getContent())
+                .fileId(mdHeadingVec.getFileId())
                 .createdAt(mdHeadingVec.getCreatedAt())
                 .updatedAt(mdHeadingVec.getUpdatedAt())
                 .build();
